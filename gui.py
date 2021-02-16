@@ -161,7 +161,7 @@ class Gomoku():
         # AI_program
         # 
 
-        x, y = 
+        x, y = [0,0]
         if self.board[x][y] != 0:
             # TODO: Exception Handlings
             return
