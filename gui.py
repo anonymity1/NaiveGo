@@ -2,7 +2,7 @@ from tkinter import *
 from tkinter.messagebox import *
 
 # TODO: mcts algorithm
-# from mcts import MCTS
+from mcts import MCTS
 
 class Gomoku():
     def __init__(self, row=19, column=19):
@@ -160,11 +160,9 @@ class Gomoku():
 
         # AI_program
         # 
+        AI = MCTS()
+        [x, y] = AI.play(self.row, self.column, self.board)
 
-        x, y = [0,0]
-        if self.board[x][y] != 0:
-            # TODO: Exception Handlings
-            return
         self.is_black = not self.is_black
         self._draw_piece(x, y, self.is_black)
         self.l_info.config(text=self._ternary_op('黑方行棋', '白方行棋', self.is_black))
