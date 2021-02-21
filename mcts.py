@@ -114,6 +114,10 @@ class Node():
         # print(self._Q + self._u)
         return self._Q + self._u
 
+    def update_value(self, leaf_value):
+        self.visited_num += 1
+        self._Q += 1.0 * (leaf_value - self._Q) / self.visited_num
+
     def add_child(self, action:int, prob:float):
         self.children[action] = Node(self, prob)
 
@@ -121,7 +125,7 @@ class MCTS():
     '''Monte Carlo Tree and corresponding search algorithm'''
     def __init__(self):
         self.root = Node(None, 1.0)
-        self.playout_num = 10
+        self.playout_num = 100
     
     def _policy(self, board):
         '''Output the probability of different positions according to the board information.
@@ -131,8 +135,11 @@ class MCTS():
         Output: An iterator of (action, probability) and a score for the current board state.
         '''
         action_probs = np.ones(len(board.availables)) / len(board.availables)
-        print(action_probs)
         return zip(board.availables, action_probs), 0
+
+    def _rollout_policy(self, board:Board):
+        action_probs = np.random.rand(len(board.availables))
+        return zip(board.availables, action_probs)
 
     def _select_best(self, node: Node):
         return max(node.children.items(), key=lambda a: a[1].get_value())
@@ -144,17 +151,23 @@ class MCTS():
                 node.add_child(action, prob)
 
     def _update_recursive(self, node, leaf_value):
-        pass
+        if not node.is_root():
+            self._update_recursive(node.parent, -leaf_value)
+        node.update_value(leaf_value)
 
-    def _evaluate_rollout(self, board):
+    def _evaluate_rollout(self, board, limit=1000):
         '''return -1 or 0 or 1'''
         player = board.get_cur_player()
         for i in range(limit):
-            end, winner = board.game_end()
+            end, winner = board.who_win()
             if end:
                 break
-            # action_probs = 
-        pass
+            action_probs = self._rollout_policy(board)
+            max_action = max(action_probs, key=itemgetter(1))[0]
+            board.move(max_action)
+        else:
+            print("tuoshi")
+        return winner        
 
     def _playout(self, board: Board):
         node = self.root
@@ -166,11 +179,10 @@ class MCTS():
 
         action_probs, _ = self._policy(board)
         end, winner = board.who_win()
-        print("tuoshi")        
         if not end:
             self._expand(node, action_probs)
-        # leaf_value = self._evaluate_rollout(board)
-        # self._update_recursive(node, -leaf_value)
+        leaf_value = self._evaluate_rollout(board)
+        self._update_recursive(node, -leaf_value)
 
     def play(self, row:int, column:int, board_state:list):
         '''AI exposed interface'''

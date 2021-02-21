@@ -15,6 +15,7 @@ class Gomoku():
         self.c_board_color = "#e6b953"
         self.b_font_info = ("楷体", 12, "bold")
 
+        self.last_x, self.last_y = -1, -1
         self.is_black = True
         self.is_start = False
         self.human = False
@@ -48,7 +49,6 @@ class Gomoku():
 
         #1 TODO: board
         #2 TODO: click event
-
         self.root.mainloop()
 
     def _start_black(self):
@@ -56,7 +56,7 @@ class Gomoku():
         self._state_shift(0)
 
     def _start_white(self):
-        self.is_black = False
+        self.is_black = True
         self._state_shift(0)
         self._AI_player()
 
@@ -65,6 +65,7 @@ class Gomoku():
 
     def _defeat(self):
         self._state_shift(2)
+        self.c_gomoku.create_text(int(self.c_gomoku['width'])/2, int(self.c_gomoku['height'])/2, text="真菜", font=("楷体", 50, "bold"), fill='blue')
 
     def _state_shift(self, l:int):
         '''The header buttons can be seen as a state machine'''
@@ -134,9 +135,16 @@ class Gomoku():
         x, y = int((e.x - self.half_mesh) / self.mesh), int((e.y - self.half_mesh) / self.mesh)
         if self.board[x][y] != 0:
             return
+
+        self.last_x, self.last_y = x, y 
+
         self._draw_piece(x, y, self.is_black)
-        self.l_info.config(text=self._ternary_op('黑方行棋', '白方行棋', self.is_black))
         self.board[x][y] = self._ternary_op(1, -1, self.is_black)
+
+        self._gomoku_who_win()
+
+        self.is_black = not self.is_black
+        self.l_info.config(text=self._ternary_op('黑方行棋', '白方行棋', self.is_black))
         
         # self._Human_player() # just for testing
         self._AI_player()
@@ -156,22 +164,64 @@ class Gomoku():
 
         Gomoku Board status: 0 means no pieces, 1 means black pieces and -1 means white pieces
         '''
+
         self.human = False
 
         # AI_program
-        # 
+
         AI = MCTS()
         [x, y] = AI.play(self.row, self.column, self.board)
 
-        self.is_black = not self.is_black
         self._draw_piece(x, y, self.is_black)
-        self.l_info.config(text=self._ternary_op('黑方行棋', '白方行棋', self.is_black))
         self.board[x][y] = self._ternary_op(1, -1, self.is_black)
+
+        self.last_x, self.last_y = x, y 
+        self._gomoku_who_win()
+
+        self.is_black = not self.is_black
+        self.l_info.config(text=self._ternary_op('黑方行棋', '白方行棋', self.is_black))
         self.human = True
 
     def _gomoku_who_win(self):
         '''Nothing to say, just brute force search is over'''
-        pass
+        end, winner = False, 0
+
+        x, y = self.last_x, self.last_y
+        four_dir = []
+        four_dir.append([self.board[i][y] for i in range(self.row)])
+        four_dir.append([self.board[x][j] for j in range(self.column)])
+        def tilt_dir(x, y, dx, dy):
+            cur = []
+            while 0 <= x < self.row and 0 <= y < self.column:
+                x, y = x + dx, y + dy
+            x, y = x - dx, y - dy
+            while 0 <= x < self.row and 0 <= y < self.column:
+                cur.append(self.board[x][y])
+                x, y = x - dx, y - dy
+            return cur
+        four_dir.append(tilt_dir(x, y, 1, 1))
+        four_dir.append(tilt_dir(x, y, 1, -1))
+
+        tag = self._ternary_op(1, -1, self.is_black)
+        for l in four_dir:
+            cnt = 0
+            for p in l:
+                if p == tag:
+                    cnt += 1
+                    if cnt == 5:
+                        end, winner = True, self._ternary_op(1, -1, self.is_black)
+                else:
+                    cnt = 0
+        if end == False:
+            return
+        elif end == True and winner == 1:
+            self._state_shift(2)
+            showinfo("提示", "黑方获胜")
+        elif end == True and winner == -1:
+            self._state_shift(2)
+            showinfo("提示", "白方获胜")
+        else:
+            pass
 
     # TODO: Go decision function
     def _go_who_win(self):
