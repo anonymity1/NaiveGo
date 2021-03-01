@@ -1,8 +1,11 @@
 from tkinter import * 
 from tkinter.messagebox import *
 
-# TODO: mcts algorithm
+import threading
+
 from mcts import MCTS
+# TODO: mcts and alphago algorithm
+# from alpha import Alpha
 
 class Gomoku():
     def __init__(self, row=19, column=19):
@@ -58,7 +61,8 @@ class Gomoku():
     def _start_white(self):
         self.is_black = True
         self._state_shift(0)
-        self._AI_player()
+        # self._AI_player()
+        self._ai_thread()
 
     def _restart(self):
         self._state_shift(1)
@@ -82,6 +86,7 @@ class Gomoku():
             self.board = [[0 for x in range(self.column)] for x in range(self.row)]
         elif l == 2:
             state_list = [DISABLED, DISABLED, NORMAL, DISABLED]
+            self.is_start = False
         else: 
             # TODO: Exception handling
             return
@@ -147,7 +152,8 @@ class Gomoku():
         self.l_info.config(text=self._ternary_op('黑方行棋', '白方行棋', self.is_black))
         
         # self._Human_player() # just for testing
-        self._AI_player()
+        # self._AI_player()
+        self._ai_thread()
 
     def _ternary_op(self, black, white, tag:bool):
         '''ternary operator on whether the player is black or white'''
@@ -166,6 +172,9 @@ class Gomoku():
         '''
 
         self.human = False
+
+        if self.is_start == False:
+            return
 
         # AI_program
 
@@ -227,6 +236,12 @@ class Gomoku():
     def _go_who_win(self):
         pass
 
+    def _ai_thread(self):
+        '''Calling AI program takes a long time, open another thread for execution.'''
+        self.thread = threading.Thread(target=self._AI_player)
+        self.thread.start()
+
 if __name__ == '__main__':
-    gomoku = Gomoku(19, 19)
+    gomoku = Gomoku(10, 10)
     gomoku.run()
+

@@ -2,97 +2,17 @@ import numpy as np
 import copy
 
 from operator import itemgetter
+from gomoku_board import Board
 
 C_PUCT=5.0
-
-class Board():
-    '''Gomukou Board state contains the following information:
-    Board position where the current player can move.
-    The impact of the move operation on the board.
-    '''
-    def __init__(self, row=19, column=19):
-        '''The initialized board can only call the integer and coordinate conversion function'''
-        self.row = row
-        self.column = column
-
-        self.last_move = -1
-        self.is_black = True
-        self.availables = list(range(self.row * self.column))
-
-    def set_state(self, board_state:list):
-        self.board_state = board_state
-        cur = 0
-        for x in range(self.row):
-            for y in range(self.column):
-                if board_state[x][y] == 0:
-                    continue
-                self.availables.remove(self.coordinate_to_integer(x,y))       
-                if board_state[x][y] == 1:
-                    cur = cur + 1
-                else: # board_state[x][y] == -1
-                    cur = cur - 1
-
-        self.is_black = True if cur == 0 else False
-
-    def move(self, action: int):
-        self.last_move = action
-        self.availables.remove(action)
-        self.is_black = not self.is_black
-
-        x, y = self.interger_to_coordinate(action)
-        self.board_state[x][y] = self._ternary_op(1, -1, self.is_black)
-
-    def coordinate_to_integer(self, x, y):
-        return self.column * x + y
-
-    def interger_to_coordinate(self, move):
-        return move // self.column, move % self.column
-
-    def who_win(self):
-        '''TODO: last_move'''
-        if self.last_move == -1:
-            return False, 0
-        x, y = self.interger_to_coordinate(self.last_move)
-        four_dir = []
-        four_dir.append([self.board_state[i][y] for i in range(self.row)])
-        four_dir.append([self.board_state[x][j] for j in range(self.column)])
-        def tilt_dir(x, y, dx, dy):
-            cur = []
-            while 0 <= x < self.row and 0 <= y < self.column:
-                x, y = x + dx, y + dy
-            x, y = x - dx, y - dy
-            while 0 <= x < self.row and 0 <= y < self.column:
-                cur.append(self.board_state[x][y])
-                x, y = x - dx, y - dy
-            return cur
-        four_dir.append(tilt_dir(x, y, 1, 1))
-        four_dir.append(tilt_dir(x, y, 1, -1))
-
-        tag = self._ternary_op(1, -1, self.is_black)
-        for l in four_dir:
-            cnt = 0
-            for p in l:
-                if p == tag:
-                    cnt += 1
-                    if cnt == 5:
-                        return True, self._ternary_op(1, -1, self.is_black)
-                else:
-                    cnt = 0
-        if self.availables == []:
-            return True, 0
-        return False, 0
-
-    def get_cur_player(self):
-        return self.is_black
-
-    def _ternary_op(self, black, white, tag:bool):
-        return black if tag == True else white
 
 class Node():
     '''A node in the Monte Carlo Search Tree contains the following information
     Relationship among different nodes, parents and children.
     '''
     def __init__(self, parent, prob:float):
+        '''Initalize the Gomoku Board
+        '''
         self.parent = parent
         self.children = {} # key-value pairs between actions and nodes
 
@@ -129,7 +49,8 @@ class MCTS():
     
     def _policy(self, board):
         '''Output the probability of different positions according to the board information.
-        And this mcts algorithm use a naive policy.
+        And this mcts algorithm use a naive policy. In the AlphaZero version, use the Policy 
+        Network to replace this naive function.
 
         Input: Board state
         Output: An iterator of (action, probability) and a score for the current board state.
@@ -137,37 +58,46 @@ class MCTS():
         action_probs = np.ones(len(board.availables)) / len(board.availables)
         return zip(board.availables, action_probs), 0
 
-    def _rollout_policy(self, board:Board):
-        action_probs = np.random.rand(len(board.availables))
-        return zip(board.availables, action_probs)
-
     def _select_best(self, node: Node):
+        '''Select best node among the child nodes according to the node's Q value.'''
         return max(node.children.items(), key=lambda a: a[1].get_value())
 
     def _expand(self, node: Node, action_probs: iter):
-        ''''''
+        '''If the game is not over in the current situation, expand this best child node'''
         for action, prob in action_probs:
             if action not in node.children:
                 node.add_child(action, prob)
 
-    def _update_recursive(self, node, leaf_value):
-        if not node.is_root():
-            self._update_recursive(node.parent, -leaf_value)
-        node.update_value(leaf_value)
+    def _random_rollout(self, board:Board):
+        '''In this mcts algorithm, randomly select the child node. Don't expand, just search.
+        
+        This function is only called by the _evaluate_rollout function
+        '''
+        action_probs = np.random.rand(len(board.availables))
+        return zip(board.availables, action_probs)
 
-    def _evaluate_rollout(self, board, limit=1000):
-        '''return -1 or 0 or 1'''
+    def _evaluate_rollout(self, board, limit=300):
+        '''Evaluate the current node by randomly expanding the current node.Return -1 or 0 or 1.
+
+        In the AlphaZero version, we replace this simulation process with the policy_function.
+        '''
         player = board.get_cur_player()
         for i in range(limit):
             end, winner = board.who_win()
             if end:
                 break
-            action_probs = self._rollout_policy(board)
+            action_probs = self._random_rollout(board)
             max_action = max(action_probs, key=itemgetter(1))[0]
             board.move(max_action)
         else:
-            print("tuoshi")
-        return winner        
+            print("Game is not over")
+        return winner   
+
+    def _update_recursive(self, node, leaf_value):
+        '''Update the ancestry tree based on the result of the _evaluate_rollout function'''
+        if not node.is_root():
+            self._update_recursive(node.parent, -leaf_value)
+        node.update_value(leaf_value)     
 
     def _playout(self, board: Board):
         node = self.root
@@ -177,12 +107,27 @@ class MCTS():
             action, node = self._select_best(node)
             board.move(action)
 
-        action_probs, _ = self._policy(board)
+        action_probs, _ = self._policy(board) # In AlphaZero version, _ means leaf_value
+
         end, winner = board.who_win()
+        # Discuss in two situations: not the end game and the end game
         if not end:
             self._expand(node, action_probs)
-        leaf_value = self._evaluate_rollout(board)
+            leaf_value = self._evaluate_rollout(board)
+        else:
+            if winner == 0:
+                leaf_value = 0
+            else:
+                leaf_value = 1.0 if winner == board.get_cur_player() else -1.0
+                # TODO: cur_player
+
         self._update_recursive(node, -leaf_value)
+        # why -leaf_value? 
+        # While calling the _select_best function, we use the child node Q value 
+        # to decide which child node should be selected. But the current node and 
+        # the child node belong different players.
+
+        # self._show_tree(self.root, 1)
 
     def play(self, row:int, column:int, board_state:list):
         '''AI exposed interface'''
@@ -196,6 +141,19 @@ class MCTS():
 
         x, y = board.interger_to_coordinate(move)
         return x, y
+
+    def _show_tree(self, node:Node, cnt:int):
+        '''For debugging only'''
+        if node.is_leaf():
+            return
+        if node.is_root():
+            print("root:", cnt)
+        cnt += 1
+        for index, child in node.children.items():
+            print(index, ":", cnt, end='  ')
+        print()
+        for index, child in node.children.items():
+            self._show_tree(child, cnt)
 
 if __name__ == '__main__':
     board_state = [[0 for x in range(8)] for x in range(8)]
