@@ -12,9 +12,13 @@ class Board():
         self.is_black = True
         self.availables = list(range(self.row * self.column))
 
-    def set_state(self, board_state:list):
-        ''''''
+        self.players = [1, -1]
+
+    def set_state(self, board_state:list, start_player=0):
+        '''Set Gomoku pieces information. Also need to set current player: 
+        1 means black and -1 means white'''
         self.board_state = board_state
+
         cur = 0
         for x in range(self.row):
             for y in range(self.column):
@@ -26,15 +30,21 @@ class Board():
                 else: # board_state[x][y] == -1
                     cur = cur - 1
 
+        # Set current player:
+        self.cur_player = self.players[start_player] 
+
         self.is_black = True if cur == 0 else False
 
     def move(self, action: int):
+        '''Move pieces'''
         self.last_move = action
         self.availables.remove(action)
         self.is_black = not self.is_black
 
         x, y = self.interger_to_coordinate(action)
         self.board_state[x][y] = self._ternary_op(1, -1, self.is_black)
+
+        self.cur_player = - self.cur_player # switch the current player
 
     def coordinate_to_integer(self, x, y):
         return self.column * x + y
@@ -43,7 +53,7 @@ class Board():
         return move // self.column, move % self.column
 
     def who_win(self):
-        '''TODO: last_move'''
+        '''Determine which side wins the current state'''
         if self.last_move == -1:
             return False, 0
         x, y = self.interger_to_coordinate(self.last_move)
@@ -62,14 +72,14 @@ class Board():
         four_dir.append(tilt_dir(x, y, 1, 1))
         four_dir.append(tilt_dir(x, y, 1, -1))
 
-        tag = self._ternary_op(1, -1, self.is_black)
+        tag = self._ternary_op(1, -1, not self.is_black)
         for l in four_dir:
             cnt = 0
             for p in l:
                 if p == tag:
                     cnt += 1
                     if cnt == 5:
-                        return True, self._ternary_op(1, -1, self.is_black)
+                        return True, self._ternary_op(1, -1, not self.is_black)
                 else:
                     cnt = 0
         if self.availables == []:
@@ -77,7 +87,8 @@ class Board():
         return False, 0
 
     def get_cur_player(self):
-        return self.is_black
+        '''get the current player in the current state'''
+        return self.cur_player
 
     def _ternary_op(self, black, white, tag:bool):
         return black if tag == True else white

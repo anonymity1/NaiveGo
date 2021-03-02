@@ -41,11 +41,11 @@ class Node():
     def add_child(self, action:int, prob:float):
         self.children[action] = Node(self, prob)
 
-class MCTS():
+class Alpha():
     '''Monte Carlo Tree and corresponding search algorithm'''
     def __init__(self):
         self.root = Node(None, 1.0)
-        self.playout_num = 1000
+        self.playout_num = 300
     
     def _policy(self, board):
         '''Output the probability of different positions according to the board information.
@@ -68,31 +68,6 @@ class MCTS():
             if action not in node.children:
                 node.add_child(action, prob)
 
-    def _random_rollout(self, board:Board):
-        '''In this mcts algorithm, randomly select the child node. Don't expand, just search.
-        
-        This function is only called by the _evaluate_rollout function
-        '''
-        action_probs = np.random.rand(len(board.availables))
-        return zip(board.availables, action_probs)
-
-    def _evaluate_rollout(self, board, limit=300):
-        '''Evaluate the current node by randomly expanding the current node.Return -1 or 0 or 1.
-
-        In the AlphaZero version, we replace this simulation process with the policy_function.
-        '''
-        player = board.get_cur_player()
-        for i in range(limit):
-            end, winner = board.who_win()
-            if end:
-                break
-            action_probs = self._random_rollout(board)
-            max_action = max(action_probs, key=itemgetter(1))[0]
-            board.move(max_action)
-        else:
-            print("Game is not over")
-        return winner   
-
     def _update_recursive(self, node, leaf_value):
         '''Update the ancestry tree based on the result of the _evaluate_rollout function'''
         if not node.is_root():
@@ -107,19 +82,18 @@ class MCTS():
             action, node = self._select_best(node)
             board.move(action)
 
-        action_probs, _ = self._policy(board) # In AlphaZero version, _ means leaf_value
+        action_probs, leaf_value = self._policy(board) # In AlphaZero version, _ means leaf_value
 
         end, winner = board.who_win()
         # Discuss in two situations: not the end game and the end game
         if not end:
             self._expand(node, action_probs)
-            leaf_value = self._evaluate_rollout(board)
         else:
             if winner == 0:
                 leaf_value = 0
             else:
                 leaf_value = 1.0 if winner == 1 else -1.0
-                # TODO: cur_player
+                # TODO: deal with the problem of cur_player
 
         self._update_recursive(node, -leaf_value)
         # why -leaf_value? 
@@ -129,18 +103,51 @@ class MCTS():
 
         # self._show_tree(self.root, 1)
 
-    def play(self, row:int, column:int, board_state:list):
-        '''AI exposed interface'''
+    def _play_probs(self, row:int, column:int, board_state:list):
+        '''get move probabilities'''
         board = Board(row, column)
         board.set_state(board_state)
 
         for n in range(self.playout_num):
             board_copy = copy.deepcopy(board)
             self._playout(board_copy)
-        move = max(self.root.children.items(), key=lambda a: a[1].visited_num)[0]
 
-        x, y = board.interger_to_coordinate(move)
+        def softmax(x):
+            probs = np.exp(x - np.max(x))
+            probs /= np.sum(probs)
+            return probbs
+
+        act_visits = [(act, node.visited_num) for act, node in self.root.children.items()]
+        act, visits = zip(*act_visits)
+        act_probs = softmax(1.0/1e-3 * np.log(np.array(visits) + 1e-10))
+
+        return acts, act_probs
+
+    def play(self, row:int, column:int, board_list:list):
+        '''AI interface'''
+        acts, probs = self._play_probs(row, column, board_state)
+        move_probs[list(acts)] = probs
+        action = np.random.choice(acts, p=probs)
+        self._update_with_move(-1)
+        board = Board(row, column)
+        x, y = board.interger_to_coordinate(action)
         return x, y
+
+    def self_play(self, row:int, column:int, board:list):
+        '''Generate self-play data'''
+        acts, probs = self._play_probs(row, column, board_state)
+        move_probs[list(acts)] = probs
+        move = np.random.choice(acts, p=0.75*probs+0.25*np.random.dirichlet(0.3*np.ones(len(probs))))
+        self._update_with_move(move)
+        return move, move_probs
+
+    def _update_with_move(self, last_move):
+        '''Update the monte carlo tree with the pieces added'''
+        if last_move in self.root.children:
+            self.root = self.root.children[last_move]
+            self.root.parent = None
+        else:
+            self.root = Node(None, 1.0)
 
     def _show_tree(self, node:Node, cnt:int):
         '''For debugging only'''
