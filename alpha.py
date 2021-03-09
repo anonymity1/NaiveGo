@@ -4,6 +4,8 @@ import copy
 from operator import itemgetter
 from gomoku_board import Board
 
+from policy_network import PolicyNetwork
+
 C_PUCT=5.0
 
 class Node():
@@ -45,18 +47,17 @@ class Alpha():
     '''Monte Carlo Tree and corresponding search algorithm'''
     def __init__(self):
         self.root = Node(None, 1.0)
-        self.playout_num = 300
+        self.playout_num = 4
     
     def _policy(self, board):
         '''Output the probability of different positions according to the board information.
-        And this mcts algorithm use a naive policy. In the AlphaZero version, use the Policy 
-        Network to replace this naive function.
+        In this AlphaZero version, use the value network to judge the current situation.
 
         Input: Board state
         Output: An iterator of (action, probability) and a score for the current board state.
         '''
-        action_probs = np.ones(len(board.availables)) / len(board.availables)
-        return zip(board.availables, action_probs), 0
+        policy_network = PolicyNetwork(model_file='best_policy_pytorch.model', use_gpu=True)
+        return policy_network.policy_fn(board)
 
     def _select_best(self, node: Node):
         '''Select best node among the child nodes according to the node's Q value.'''
@@ -81,6 +82,7 @@ class Alpha():
                 break
             action, node = self._select_best(node)
             board.move(action)
+            # print(board)
 
         action_probs, leaf_value = self._policy(board) # In AlphaZero version, _ means leaf_value
 
@@ -92,8 +94,7 @@ class Alpha():
             if winner == 0:
                 leaf_value = 0
             else:
-                leaf_value = 1.0 if winner == 1 else -1.0
-                # TODO: deal with the problem of cur_player
+                leaf_value = 1.0 if winner == board.get_cur_player() else -1.0
 
         self._update_recursive(node, -leaf_value)
         # why -leaf_value? 
@@ -115,39 +116,41 @@ class Alpha():
         def softmax(x):
             probs = np.exp(x - np.max(x))
             probs /= np.sum(probs)
-            return probbs
+            return probs
 
         act_visits = [(act, node.visited_num) for act, node in self.root.children.items()]
-        act, visits = zip(*act_visits)
+        acts, visits = zip(*act_visits)
         act_probs = softmax(1.0/1e-3 * np.log(np.array(visits) + 1e-10))
 
         return acts, act_probs
 
-    def play(self, row:int, column:int, board_list:list):
-        '''AI interface'''
-        acts, probs = self._play_probs(row, column, board_state)
-        move_probs[list(acts)] = probs
-        action = np.random.choice(acts, p=probs)
-        self._update_with_move(-1)
-        board = Board(row, column)
-        x, y = board.interger_to_coordinate(action)
-        return x, y
-
-    def self_play(self, row:int, column:int, board:list):
-        '''Generate self-play data'''
-        acts, probs = self._play_probs(row, column, board_state)
-        move_probs[list(acts)] = probs
-        move = np.random.choice(acts, p=0.75*probs+0.25*np.random.dirichlet(0.3*np.ones(len(probs))))
-        self._update_with_move(move)
-        return move, move_probs
-
     def _update_with_move(self, last_move):
-        '''Update the monte carlo tree with the pieces added'''
+        '''Update the monte carlo tree with the pieces added.'''
         if last_move in self.root.children:
             self.root = self.root.children[last_move]
             self.root.parent = None
         else:
             self.root = Node(None, 1.0)
+
+    def play(self, row:int, column:int, board_state:list):
+        '''AI interface.'''
+        acts, probs = self._play_probs(row, column, board_state)
+        move_probs = np.zeros(row*column)
+        move_probs[list(acts)] = probs
+        action = np.random.choice(acts, p=probs)
+        # self._update_with_move(-1)
+        board = Board(row, column)
+        x, y = board.interger_to_coordinate(action)
+        return x, y
+
+    def self_play(self, row:int, column:int, board_state:list):
+        '''The interface to generate Gomoku game training data.'''
+        acts, probs = self._play_probs(row, column, board_state)
+        move_probs = np.zeros(row*column)
+        move_probs[list(acts)] = probs
+        move = np.random.choice(acts, p=0.75*probs+0.25*np.random.dirichlet(0.3*np.ones(len(probs))))
+        self._update_with_move(move)
+        return move, move_probs
 
     def _show_tree(self, node:Node, cnt:int):
         '''For debugging only'''
@@ -164,7 +167,7 @@ class Alpha():
 
 if __name__ == '__main__':
     board_state = [[0 for x in range(8)] for x in range(8)]
-    mcts = MCTS()
-    x, y = mcts.play(8, 8, board_state)
+    AI = Alpha()
+    x, y = AI.play(8, 8, board_state)
     print(x, y)
 

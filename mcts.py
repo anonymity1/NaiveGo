@@ -45,7 +45,7 @@ class MCTS():
     '''Monte Carlo Tree and corresponding search algorithm'''
     def __init__(self):
         self.root = Node(None, 1.0)
-        self.playout_num = 1000
+        self.playout_num = 300
     
     def _policy(self, board):
         '''Output the probability of different positions according to the board information.
@@ -100,6 +100,7 @@ class MCTS():
         node.update_value(leaf_value)     
 
     def _playout(self, board: Board):
+        '''play only once'''
         node = self.root
         while(True):
             if node.is_leaf():
@@ -118,8 +119,7 @@ class MCTS():
             if winner == 0:
                 leaf_value = 0
             else:
-                leaf_value = 1.0 if winner == 1 else -1.0
-                # TODO: cur_player
+                leaf_value = 1.0 if board.get_cur_player() else -1.0
 
         self._update_recursive(node, -leaf_value)
         # why -leaf_value? 

@@ -4,8 +4,7 @@ from tkinter.messagebox import *
 import threading
 
 from mcts import MCTS
-# TODO: mcts and alphago algorithm
-# from alpha import Alpha
+from alpha import Alpha
 
 class Gomoku():
     def __init__(self, row=19, column=19):
@@ -179,6 +178,7 @@ class Gomoku():
         # AI_program
 
         AI = MCTS()
+        AI = Alpha()
         [x, y] = AI.play(self.row, self.column, self.board)
 
         self._draw_piece(x, y, self.is_black)
@@ -242,6 +242,6 @@ class Gomoku():
         self.thread.start()
 
 if __name__ == '__main__':
-    gomoku = Gomoku(10, 10)
+    gomoku = Gomoku(8, 8)
     gomoku.run()
 
