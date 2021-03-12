@@ -242,6 +242,6 @@ class Gomoku():
         self.thread.start()
 
 if __name__ == '__main__':
-    gomoku = Gomoku(8, 8)
+    gomoku = Gomoku(9, 9)
     gomoku.run()
 

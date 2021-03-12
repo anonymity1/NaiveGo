@@ -11,6 +11,7 @@ class Net(nn.Module):
 
         self.width = width
         self.height = height
+
         # common layers
         self.conv1 = nn.Conv2d(4, 32, kernel_size=3, padding=1)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, padding=1)
@@ -26,6 +27,7 @@ class Net(nn.Module):
         
 
     def forward(self, state_input):
+
         # common layers
         x = F.relu(self.conv1(state_input))
         x = F.relu(self.conv2(x))
@@ -59,8 +61,7 @@ class PolicyNetwork():
         # Initialize using the parameters in the file, 
         # or use pytorch's own method to initialize parameters.
         if model_file:
-            net_params = torch.load(model_file)
-            self.policy_net.load_state_dict(net_params)
+            self.load_file(model_file)
 
     def batch_policy_fn(self, board_state_batch):
         '''
@@ -75,7 +76,8 @@ class PolicyNetwork():
         else:
             board_state_batch = Variable(torch.FloatTensor(board_state_batch))
             log_act_probs, value = self.policy_net(board_state_batch)
-            act_probs = np.exp(log_act_probs.data.nu)
+            act_probs = np.exp(log_act_probs.data.numpy())
+            return act_probs, value
 
     def policy_fn(self, board):
         '''Gomoku board state evaluation function, which is the core improvements in the AlphaZero version.
@@ -98,7 +100,7 @@ class PolicyNetwork():
         value = value.data[0][0]
         return act_probs, value
 
-    def train_step(self, board_state_batch, mcts_probs, winner_batch, lr):
+    def train_step(self, board_state_batch, mcts_probs, winner_batch, lr=0.1):
         '''This function is used to train the network.
 
         Input: board_state_batch, mcts_probs, winner_batch
@@ -122,6 +124,8 @@ class PolicyNetwork():
         loss = value_loss + policy_loss
 
         loss.backward()
+        for param_group in self.optimizer.param_groups:
+            param_group['lr'] = lr
         self.optimizer.step()
 
         entropy = -torch.mean(torch.sum(torch.exp(log_act_probs) * log_act_probs, 1))
@@ -135,5 +139,23 @@ class PolicyNetwork():
         net_params = self.get_policy_param()
         torch.save(net_params, model_file)
 
+    def load_file(self, model_file):
+        net_params = torch.load(model_file) # 8 * 8 = 64
+        cur = self.board_height * self.board_width
+        a = torch.zeros(self.board_width*self.board_height, 4*self.board_width*self.board_height)
+        b = torch.zeros(self.board_width*self.board_height)
+        c = torch.zeros(64, 2*self.board_width*self.board_height)
+        a[(cur-64)//2:(cur+64)//2, 2*(cur-64):2*(cur+64)] = net_params['act_fc1.weight']
+
+        b[(cur-64)//2:(cur+64)//2] = net_params['act_fc1.bias']
+        c[:,cur-64:cur+64] = net_params['val_fc1.weight'] 
+        net_params['act_fc1.weight'] = a # cur, 4*cur
+        net_params['act_fc1.bias'] = b # cur
+        net_params['val_fc1.weight'] = c # 64, 2*cur
+        self.policy_net.load_state_dict(net_params)
+
 if __name__ == '__main__':
-    pass
+    a = torch.ones(4,4)
+    b = torch.zeros(2,2)
+    a[17//16:3,1:3] = b
+    print(a)
