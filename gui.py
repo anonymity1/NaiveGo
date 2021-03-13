@@ -178,7 +178,7 @@ class Gomoku():
         # AI_program
 
         AI = MCTS()
-        AI = Alpha()
+        AI = Alpha(model_file='best_policy_pytorch.model', use_gpu=False)
         [x, y] = AI.play(self.row, self.column, self.board)
 
         self._draw_piece(x, y, self.is_black)

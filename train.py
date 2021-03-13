@@ -34,7 +34,7 @@ class Train():
             # generate self-play training data
             self.board = Board(self.row, self.column)
             self.board.set_state()
-            AI = Alpha()
+            AI = Alpha(model_file='best_policy_pytorch.model')
             board_states, mcts_probs, current_players = [], [], []
             while(True):
                 move, move_probs = AI.self_play(self.row, self.column, self.board.board_state)

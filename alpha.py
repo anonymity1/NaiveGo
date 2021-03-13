@@ -45,9 +45,11 @@ class Node():
 
 class Alpha():
     '''Monte Carlo Tree and corresponding search algorithm'''
-    def __init__(self):
+    def __init__(self, model_file=None, use_gpu=True):
         self.root = Node(None, 1.0)
         self.playout_num = 3
+        self.model_file = model_file
+        self.use_gpu = use_gpu
     
     def _policy(self, board):
         '''Output the probability of different positions according to the board information.
@@ -56,7 +58,7 @@ class Alpha():
         Input: Board state
         Output: An iterator of (action, probability) and a score for the current board state.
         '''
-        policy_network = PolicyNetwork(width=board.row, height=board.column, model_file='best_policy_pytorch.model', use_gpu=True)
+        policy_network = PolicyNetwork(width=board.row, height=board.column, model_file=self.model_file, use_gpu=self.use_gpu)
         return policy_network.policy_fn(board)
 
     def _select_best(self, node: Node):
@@ -105,7 +107,9 @@ class Alpha():
         # self._show_tree(self.root, 1)
 
     def _play_probs(self, row:int, column:int, board_state:list):
-        '''get move probabilities'''
+        '''Get move probabilities: for self-play and human-machine game interfaces.
+        
+        Main effect: call the _play_out function repeatedly'''
         board = Board(row, column)
         board.set_state(board_state)
 
@@ -168,7 +172,7 @@ class Alpha():
 if __name__ == '__main__':
     row, column = 12, 12
     board_state = [[0 for x in range(row)] for x in range(column)]
-    AI = Alpha()
+    AI = Alpha(model_file='best_policy_pytorch.model')
     x, y = AI.play(row, column, board_state)
     print(x, y)
 
