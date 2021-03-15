@@ -23,7 +23,8 @@ class Gomoku():
         self.human = False
         self.board = [[0 for x in range(self.column)] for x in range(self.row)]
 
-    def run(self):
+    def run(self, model_file=None):
+        self.model_file = model_file
         self.root = Tk()
         self.root.title("Gomoku: Human vs AI")
         self.root.resizable(height = None, width = None)
@@ -178,7 +179,7 @@ class Gomoku():
         # AI_program
 
         AI = MCTS()
-        AI = Alpha(model_file='best_policy_pytorch.model', use_gpu=False)
+        AI = Alpha(model_file=self.model_file, use_gpu=False)
         [x, y] = AI.play(self.row, self.column, self.board)
 
         self._draw_piece(x, y, self.is_black)
@@ -242,6 +243,7 @@ class Gomoku():
         self.thread.start()
 
 if __name__ == '__main__':
-    gomoku = Gomoku(9, 9)
-    gomoku.run()
+    row, column = 8, 8
+    gomoku = Gomoku(row, column)
+    gomoku.run('./best_model/best_model_{}x{}'.format(row, column))
 

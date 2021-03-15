@@ -170,9 +170,9 @@ class Alpha():
             self._show_tree(child, cnt)
 
 if __name__ == '__main__':
-    row, column = 12, 12
+    row, column = 10, 10
     board_state = [[0 for x in range(row)] for x in range(column)]
-    AI = Alpha(model_file='best_policy_pytorch.model')
+    AI = Alpha(model_file='./best_model/best_model_{}x{}'.format(row, column))
     x, y = AI.play(row, column, board_state)
     print(x, y)
 

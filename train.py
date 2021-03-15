@@ -9,32 +9,34 @@ from alpha import Alpha
 from policy_network import PolicyNetwork
 
 class Train():
-    def __init__(self, init_model=None, row=8, column=8, batch_size=20, buffer_size=10000):
+    def __init__(self, init_model=None, row=8, column=8, 
+                    batch_size=200, buffer_size=10000, epochs=5, game_batch_num=100, n_games=1, 
+                    check_freq=10, lr_multiplier=1.0, use_gpu=True):
         self.row = row
         self.column = column
+        self.init_model = init_model
+        self.policy_network = PolicyNetwork(model_file=init_model, width=column, height=row)
 
         self.batch_size = batch_size
         self.buffer_size = buffer_size
         self.buffer = deque(maxlen=self.buffer_size)
-        self.epochs = 5
-        self.n_games = 1
+        self.epochs = epochs
+        self.game_batch_num = game_batch_num
+        self.n_games = n_games
 
-        self.kl_targ = 0.02
-        self.game_batch_num = 10
+        self.kl_targ = 0.02 # the target value of KL Divergence
+        self.lr_multiplier = lr_multiplier # adjust the learning rate of the optimization algorithm
+        self.check_freq = check_freq # check every few game rounds to see if the algorithm is improving
 
-        self.policy_network = PolicyNetwork(model_file=init_model, width=column, height=row)
+        self.use_gpu = use_gpu
 
-        self.lr_multiplier = 1.0
-
-        self.check_freq = 2
-
-    def _collect_data(self, n_games=1):
+    def _collect_training_data(self):
         '''Realize training data collection through self-play.'''
-        for i in range(n_games):
+        for i in range(self.n_games):
             # generate self-play training data
             self.board = Board(self.row, self.column)
             self.board.set_state()
-            AI = Alpha(model_file='best_policy_pytorch.model')
+            AI = Alpha(model_file=self.init_model, use_gpu=self.use_gpu)
             board_states, mcts_probs, current_players = [], [], []
             while(True):
                 move, move_probs = AI.self_play(self.row, self.column, self.board.board_state)
@@ -88,46 +90,31 @@ class Train():
         
         return loss, entropy
 
+    def _eval_and_save_model(self, game_batch_num):
+        '''Save model to the model directory.'''
+        self.policy_network.save_model('./model/model{}_{}x{}.model'.format(game_batch_num+1, self.row, self.column))
+
     def run(self):
         '''play the number of self.game_batch_num games.
 
         If the amount of data in the buffer is greater than batch_size, 
-        perform one policy update including several epochs of training steps.'''
+        perform one policy update including several epochs of training steps.
+        '''
         try:
             for i in range(self.game_batch_num):
-                self._collect_data(self.n_games)
-                print("batch i: {}, episode_len:{}".format(i+1, self.episode_len))
+                self._collect_training_data()
+                print("Game batch i: {}, episode_len:{}".format(i+1, self.episode_len))
                 if len(self.buffer) > self.batch_size:
                     loss, entropy = self._policy_update()
+                    print("Game batch i: {}. loss: {}. entropy: {}".format(i+1, loss, entropy))
                 if (i+1) % self.check_freq == 0:
-                    print("current self-play batch: {}".format(i+1))
-                    self.policy_network.save_model('./model{}.model'.format(i+1))
+                    print("current self-play game batch i: {}".format(i+1))
+                    self._eval_and_save_model(i)
 
         except KeyboardInterrupt:
             print('\n\rquit!')
 
 if __name__ == '__main__':
-    train = Train()
+    # train = Train(init_model='./best_model/best_model_8x8', row=8, column=8, batch_size=300, buffer_size=10000)
+    train = Train(init_model='./best_model/best_model_10x10', row=10, column=10, batch_size=300, buffer_size=10000)
     train.run()
-    # a = [[1, 2, 3], [2, 3, 1]]
-    # b = [[2, 7, 5], [3, 5, 2]]
-    # c = [1, 2]
-    # print(np.var(c))
-    # a = np.array(a)
-    # b = np.array(b)
-    # res1 = a * (np.log(a + 1) - np.log(b + 1))
-    # print(res1)
-    # print(a)
-    # res2 = np.sum(a, axis=0)
-    # print(res2)
-    # kl1 = np.mean(np.sum(a * (np.log(a + 1) - np.log(b + 1)), axis=(0,1)))
-    # kl2 = np.mean(np.sum(a * (np.log(a + 1) - np.log(b + 1)), axis=0))
-    # kl3 = np.mean(np.sum(a * (np.log(a + 1) - np.log(b + 1))))
-    # print(kl1, kl2, kl3)
-    # train._collect_data()
-    # board = Board(8,8)
-    # board.set_state()
-    # board.move(2)
-    # board.move(3)
-    # board.move(4)
-    # print(board)
