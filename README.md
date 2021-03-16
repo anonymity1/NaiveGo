@@ -25,3 +25,7 @@ And if you want to train the neural network, run the following order in the curr
     alpha.py: Performing the AlphaZero Version MCTS algorithm
 
     policy_network.py: Neural network to evaluate the current board state.
+
+## Performance
+
+![img](https://github.com/anonymity1/NaiveGo/blob/master/img/Gomoku%20Human%20vs%20AI.gif)
