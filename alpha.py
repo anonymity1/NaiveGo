@@ -45,11 +45,10 @@ class Node():
 
 class Alpha():
     '''Monte Carlo Tree and corresponding search algorithm'''
-    def __init__(self, model_file=None, use_gpu=True):
+    def __init__(self, model_file=None):
         self.root = Node(None, 1.0)
         self.playout_num = 3
         self.model_file = model_file
-        self.use_gpu = use_gpu
     
     def _policy(self, board):
         '''Output the probability of different positions according to the board information.
@@ -58,7 +57,7 @@ class Alpha():
         Input: Board state
         Output: An iterator of (action, probability) and a score for the current board state.
         '''
-        policy_network = PolicyNetwork(width=board.row, height=board.column, model_file=self.model_file, use_gpu=self.use_gpu)
+        policy_network = PolicyNetwork(width=board.row, height=board.column, model_file=self.model_file)
         return policy_network.policy_fn(board)
 
     def _select_best(self, node: Node):
