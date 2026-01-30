@@ -6,6 +6,8 @@ from gomoku_board import Board
 
 from policy_network import PolicyNetwork
 
+import torch
+
 C_PUCT=5.0
 
 class Node():
@@ -45,11 +47,29 @@ class Node():
 
 class Alpha():
     '''Monte Carlo Tree and corresponding search algorithm'''
-    def __init__(self, model_file=None):
+    def __init__(self, policy_network: PolicyNetwork=None, playout_num:int=3):
         self.root = Node(None, 1.0)
-        self.playout_num = 3
-        self.model_file = model_file
-    
+        self.playout_num = playout_num
+        self.policy_network = policy_network
+
+    def reset_root(self):
+        self.root = Node(None, 1.0)
+
+    def get_action(self, board:Board, temp=1e-3):
+        '''
+        专门用于评估对弈或正式比赛的接口
+        temp: 温度参数。temp 越小，选择越趋于确定性（选访问量最大的点）
+        '''
+        row = board.row
+        column = board.column
+        board_state = board.board_state
+        acts, probs = self._play_probs(row, column, board_state)
+        move_probs = np.zeros(row*column)
+        move_probs[list(acts)] = probs
+        action = np.random.choice(acts, p=probs)
+        return action
+        
+
     def _policy(self, board):
         '''Output the probability of different positions according to the board information.
         In this AlphaZero version, use the value network to judge the current situation.
@@ -57,20 +77,19 @@ class Alpha():
         Input: Board state
         Output: An iterator of (action, probability) and a score for the current board state.
         '''
-        policy_network = PolicyNetwork(width=board.row, height=board.column, model_file=self.model_file)
-        return policy_network.policy_fn(board)
+        return self.policy_network.policy_fn(board)
 
     def _select_best(self, node: Node):
         '''Select best node among the child nodes according to the node's Q value.'''
         return max(node.children.items(), key=lambda a: a[1].get_value())
 
-    def _expand(self, node: Node, action_probs: iter):
+    def _expand(self, node: Node, action_probs: iter, board: Board):
         '''If the game is not over in the current situation, expand this best child node'''
         for action, prob in action_probs:
-            if action not in node.children:
+            if action not in node.children and action in board.availables:
                 node.add_child(action, prob)
 
-    def _update_recursive(self, node, leaf_value):
+    def _update_recursive(self, node: Node, leaf_value):
         '''Update the ancestry tree based on the result of the _evaluate_rollout function'''
         if not node.is_root():
             self._update_recursive(node.parent, -leaf_value)
@@ -90,7 +109,7 @@ class Alpha():
         end, winner = board.who_win()
         # Discuss in two situations: not the end game and the end game
         if not end:
-            self._expand(node, action_probs)
+            self._expand(node, action_probs, board)
         else:
             if winner == 0:
                 leaf_value = 0
@@ -105,12 +124,28 @@ class Alpha():
 
         # self._show_tree(self.root, 1)
 
-    def _play_probs(self, row:int, column:int, board_state:list):
+    def _play_probs(self, row:int, column:int, board_state:list, temp=1e-3, is_self_play=False):
         '''Get move probabilities: for self-play and human-machine game interfaces.
         
         Main effect: call the _play_out function repeatedly'''
         board = Board(row, column)
         board.set_state(board_state)
+
+        # --- 1. 注入 Dirichlet 噪声 (仅在自博弈时) ---
+        # 必须在 playout 开始前作用于根节点的先验概率
+        if is_self_play:
+            acts = board.availables
+
+            action_probs, val = self._policy(board)  # 先调用一次以填充根节点的 children
+
+            # 0.3 是五子棋/围棋中常用的噪声参数，len(acts) 确保维度匹配
+            noise = np.random.dirichlet([0.3] * len(list(action_probs)))
+            for action, prob in action_probs:
+                # AlphaZero 标准：0.75 * 原始概率 + 0.25 * 噪声
+                prior_prob = 0.75 * prob + 0.25 * noise[action]
+                if action not in self.root.children and action in board.availables:
+                    self.root.add_child(action, prior_prob)
+                
 
         for n in range(self.playout_num):
             board_copy = copy.deepcopy(board)
@@ -123,11 +158,11 @@ class Alpha():
 
         act_visits = [(act, node.visited_num) for act, node in self.root.children.items()]
         acts, visits = zip(*act_visits)
-        act_probs = softmax(1.0/1e-3 * np.log(np.array(visits) + 1e-10))
+        act_probs = softmax(1.0/temp * np.log(np.array(visits) + 1e-10))
 
         return acts, act_probs
 
-    def _update_with_move(self, last_move):
+    def update_with_move(self, last_move):
         '''Update the monte carlo tree with the pieces added.'''
         if last_move in self.root.children:
             self.root = self.root.children[last_move]
@@ -146,13 +181,13 @@ class Alpha():
         x, y = board.interger_to_coordinate(action)
         return x, y
 
-    def self_play(self, row:int, column:int, board_state:list):
+    def self_play(self, row:int, column:int, board_state:list, temp=1e-3, is_self_play=True):
         '''The interface to generate Gomoku game training data.'''
-        acts, probs = self._play_probs(row, column, board_state)
+        acts, probs = self._play_probs(row, column, board_state, temp=temp, is_self_play=is_self_play)
         move_probs = np.zeros(row*column)
         move_probs[list(acts)] = probs
-        move = np.random.choice(acts, p=0.75*probs+0.25*np.random.dirichlet(0.3*np.ones(len(probs))))
-        self._update_with_move(move)
+        move = np.random.choice(acts, p=probs)
+        self.update_with_move(move)
         return move, move_probs
 
     def _show_tree(self, node:Node, cnt:int):
@@ -171,7 +206,8 @@ class Alpha():
 if __name__ == '__main__':
     row, column = 10, 10
     board_state = [[0 for x in range(row)] for x in range(column)]
-    AI = Alpha(model_file='./best_model/best_model_{}x{}'.format(row, column))
+    policy_network = PolicyNetwork(model_file='./best_model/best_model_8x8', width=row, height=column)
+    AI = Alpha(policy_network=policy_network)
     x, y = AI.play(row, column, board_state)
     print(x, y)
 

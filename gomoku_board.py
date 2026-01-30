@@ -100,7 +100,7 @@ class Board():
 
     def current_state(self):
         '''The input board state of the neural network'''
-        square_state = np.zeros((4, self.column, self.row))
+        square_state = np.zeros((4, self.row, self.column))
         for i in range(self.row):
             for j in range(self.column):
                 if self.board_state[i][j] == -self.get_cur_player():

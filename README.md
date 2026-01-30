@@ -20,8 +20,6 @@ And if you want to train the neural network, run the following order in the curr
 
     gomoku_board.py: Realization of the gomoku board state
 
-    mcts.py: Performing the Monte Carlo Tree Search algorithm
-
     alpha.py: Performing the AlphaZero Version MCTS algorithm
 
     policy_network.py: Neural network to evaluate the current board state.

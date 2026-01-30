@@ -3,6 +3,8 @@ from tkinter.messagebox import *
 import threading
 import math
 
+from policy_network import PolicyNetwork
+
 # 尝试导入 AI 模块，没有则忽略
 try:
     from alpha import Alpha
@@ -50,6 +52,8 @@ class Gomoku:
 
     def run(self, model_file=None):
         self.model_file = model_file
+        self.policy_network = PolicyNetwork(model_file=model_file, width=self.cols, height=self.rows)
+        self.AI = Alpha(policy_network=self.policy_network)
         self.root = Tk()
         self.root.title(f"Gomoku AI (Katago Style) - {self.cols}x{self.rows}")
         
@@ -354,8 +358,8 @@ class Gomoku:
         try:
             # ------------------------
             # 在这里接入你的 AI
-            AI = Alpha(model_file=self.model_file)
-            move = AI.play(self.rows, self.cols, self.board)
+            move = self.AI.play(self.rows, self.cols, self.board)
+            self.AI.update_with_move(move)
             # 假设返回 move = [row, col] 或 [col, row]，请根据你的AI实际返回值确认
             # ------------------------
             # ------------------------
@@ -385,4 +389,4 @@ class Gomoku:
 if __name__ == '__main__':
     # 启动 15x15 棋盘
     game = Gomoku(rows=8, cols=8)
-    game.run(model_file='./best_model/best_model_8x8')
+    game.run(model_file='./model/model40_13x13.model')
